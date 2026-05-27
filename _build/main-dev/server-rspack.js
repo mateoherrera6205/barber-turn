@@ -19,9 +19,9 @@
  *
  */
 (() => {
-"use strict";
 var __webpack_modules__ = ({
 "./bot/seed.js"(__unused_rspack_module, __webpack_exports__, __webpack_require__) {
+"use strict";
 __webpack_require__.d(__webpack_exports__, {
   runSeed: () => (runSeed)
 });
@@ -438,6 +438,7 @@ const runSeed = ()=>_async_to_generator(function*() {
 
 },
 "./imports/api/analytics/analytics.publications.js"(__unused_rspack_module, __unused_rspack___webpack_exports__, __webpack_require__) {
+"use strict";
 /* import */ var meteor_meteor__rspack_import_0 = __webpack_require__("meteor/meteor");
 /* import */ var meteor_meteor__rspack_import_0_default = /*#__PURE__*/__webpack_require__.n(meteor_meteor__rspack_import_0);
 /* import */ var _appointments_appointments_js__rspack_import_1 = __webpack_require__("./imports/api/appointments/appointments.js");
@@ -470,6 +471,7 @@ meteor_meteor__rspack_import_0.Meteor.publish('analytics.overview', function() {
 
 },
 "./imports/api/appointments/appointments.js"(__unused_rspack_module, __webpack_exports__, __webpack_require__) {
+"use strict";
 __webpack_require__.d(__webpack_exports__, {
   Appointments: () => (Appointments)
 });
@@ -481,6 +483,7 @@ const Appointments = new meteor_mongo__rspack_import_0.Mongo.Collection('appoint
 
 },
 "./imports/api/appointments/appointments.methods.js"(__unused_rspack_module, __unused_rspack___webpack_exports__, __webpack_require__) {
+"use strict";
 /* import */ var meteor_meteor__rspack_import_0 = __webpack_require__("meteor/meteor");
 /* import */ var meteor_meteor__rspack_import_0_default = /*#__PURE__*/__webpack_require__.n(meteor_meteor__rspack_import_0);
 /* import */ var meteor_check__rspack_import_1 = __webpack_require__("meteor/check");
@@ -605,6 +608,7 @@ meteor_meteor__rspack_import_0.Meteor.methods({
 
 },
 "./imports/api/appointments/appointments.publications.js"(__unused_rspack_module, __unused_rspack___webpack_exports__, __webpack_require__) {
+"use strict";
 /* import */ var meteor_meteor__rspack_import_0 = __webpack_require__("meteor/meteor");
 /* import */ var meteor_meteor__rspack_import_0_default = /*#__PURE__*/__webpack_require__.n(meteor_meteor__rspack_import_0);
 /* import */ var meteor_check__rspack_import_1 = __webpack_require__("meteor/check");
@@ -652,7 +656,158 @@ meteor_meteor__rspack_import_0.Meteor.publish('appointments.all', function() {
 
 
 },
+"./imports/api/predictions/predictions.js"(__unused_rspack_module, __webpack_exports__, __webpack_require__) {
+"use strict";
+__webpack_require__.d(__webpack_exports__, {
+  Predictions: () => (Predictions)
+});
+/* import */ var meteor_mongo__rspack_import_0 = __webpack_require__("meteor/mongo");
+/* import */ var meteor_mongo__rspack_import_0_default = /*#__PURE__*/__webpack_require__.n(meteor_mongo__rspack_import_0);
+
+const Predictions = new meteor_mongo__rspack_import_0.Mongo.Collection('predictions'); // {
+ //   _id: String,
+ //   diaSemana: Number,        // 1=lun, 2=mar... 6=sab
+ //   hora: String,             // '09:00'
+ //   clientesEsperados: Number, // promedio histórico
+ //   barberosRecomendados: Number,
+ //   ocupacionHistorica: Number, // % promedio
+ //   alerta: String,           // 'ok' | 'overbooking' | 'sobrecapacidad' | 'demanda_alta'
+ //   semanasTomadas: Number,   // cuántas semanas de datos se usaron
+ //   updatedAt: Date,
+ // }
+
+
+},
+"./imports/api/predictions/predictions.methods.js"(__unused_rspack_module, __webpack_exports__, __webpack_require__) {
+"use strict";
+__webpack_require__.d(__webpack_exports__, {
+  calcularPredicciones: () => (calcularPredicciones)
+});
+/* import */ var meteor_meteor__rspack_import_0 = __webpack_require__("meteor/meteor");
+/* import */ var meteor_meteor__rspack_import_0_default = /*#__PURE__*/__webpack_require__.n(meteor_meteor__rspack_import_0);
+/* import */ var _appointments_appointments_js__rspack_import_1 = __webpack_require__("./imports/api/appointments/appointments.js");
+/* import */ var _predictions_js__rspack_import_2 = __webpack_require__("./imports/api/predictions/predictions.js");
+function asyncGeneratorStep(gen, resolve, reject, _next, _throw, key, arg) {
+    try {
+        var info = gen[key](arg);
+        var value = info.value;
+    } catch (error) {
+        reject(error);
+        return;
+    }
+    if (info.done) {
+        resolve(value);
+    } else {
+        Promise.resolve(value).then(_next, _throw);
+    }
+}
+function _async_to_generator(fn) {
+    return function() {
+        var self = this, args = arguments;
+        return new Promise(function(resolve, reject) {
+            var gen = fn.apply(self, args);
+            function _next(value) {
+                asyncGeneratorStep(gen, resolve, reject, _next, _throw, "next", value);
+            }
+            function _throw(err) {
+                asyncGeneratorStep(gen, resolve, reject, _next, _throw, "throw", err);
+            }
+            _next(undefined);
+        });
+    };
+}
+
+
+
+const HORAS = [
+    '09:00',
+    '10:00',
+    '11:00',
+    '12:00',
+    '14:00',
+    '15:00',
+    '16:00',
+    '17:00'
+];
+const DIAS = [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+];
+const detectarAlerta = (clientesEsperados, barberosRecomendados, ocupacion)=>{
+    if (ocupacion > 0.85) return 'demanda_alta';
+    if (clientesEsperados > barberosRecomendados) return 'overbooking';
+    if (barberosRecomendados > 3 && clientesEsperados < barberosRecomendados * 0.4) return 'sobrecapacidad';
+    return 'ok';
+};
+const calcularPredicciones = ()=>_async_to_generator(function*() {
+        console.log('🔮 Calculando predicciones...');
+        const appointments = yield _appointments_appointments_js__rspack_import_1.Appointments.find({
+            status: {
+                $in: [
+                    'confirmed',
+                    'cancelled'
+                ]
+            }
+        }).fetchAsync();
+        const semanasUnicas = new Set(appointments.map((a)=>{
+            const d = new Date(a.date);
+            return Math.floor(d.getTime() / (7 * 24 * 60 * 60 * 1000));
+        }));
+        const totalSemanas = Math.max(semanasUnicas.size, 1);
+        const predicciones = [];
+        for (const diaSemana of DIAS){
+            for (const hora of HORAS){
+                const apptsDiaHora = appointments.filter((a)=>{
+                    const d = new Date(a.date);
+                    return d.getDay() === diaSemana && a.hour === hora;
+                });
+                const confirmados = apptsDiaHora.filter((a)=>a.status === 'confirmed').length;
+                const cancelados = apptsDiaHora.filter((a)=>a.status === 'cancelled').length;
+                const total = confirmados + cancelados;
+                const clientesEsperados = parseFloat((confirmados / totalSemanas).toFixed(2));
+                const barberosRecomendados = Math.max(Math.ceil(clientesEsperados), 1);
+                const ocupacionHistorica = total > 0 ? parseFloat((confirmados / total).toFixed(2)) : 0;
+                const alerta = detectarAlerta(clientesEsperados, barberosRecomendados, ocupacionHistorica);
+                predicciones.push({
+                    diaSemana,
+                    hora,
+                    clientesEsperados,
+                    barberosRecomendados,
+                    ocupacionHistorica,
+                    alerta,
+                    semanasTomadas: totalSemanas,
+                    updatedAt: new Date()
+                });
+            }
+        }
+        yield _predictions_js__rspack_import_2.Predictions.removeAsync({});
+        for (const pred of predicciones){
+            yield _predictions_js__rspack_import_2.Predictions.insertAsync(pred);
+        }
+        console.log(`✅ ${predicciones.length} predicciones calculadas`);
+        return predicciones.length;
+    })();
+meteor_meteor__rspack_import_0.Meteor.methods({
+    'predictions.calculate' () {
+        return _async_to_generator(function*() {
+            if (!this.userId) throw new meteor_meteor__rspack_import_0.Meteor.Error('not-logged-in');
+            return yield calcularPredicciones();
+        }).call(this);
+    }
+});
+
+
+},
+"./imports/api/predictions/predictions.publications.js"() {
+
+
+},
 "./imports/api/slots/slots.js"(__unused_rspack_module, __webpack_exports__, __webpack_require__) {
+"use strict";
 __webpack_require__.d(__webpack_exports__, {
   Slots: () => (Slots)
 });
@@ -664,6 +819,7 @@ const Slots = new meteor_mongo__rspack_import_0.Mongo.Collection('slots');
 
 },
 "./imports/api/slots/slots.methods.js"(__unused_rspack_module, __unused_rspack___webpack_exports__, __webpack_require__) {
+"use strict";
 /* import */ var meteor_meteor__rspack_import_0 = __webpack_require__("meteor/meteor");
 /* import */ var meteor_meteor__rspack_import_0_default = /*#__PURE__*/__webpack_require__.n(meteor_meteor__rspack_import_0);
 /* import */ var meteor_check__rspack_import_1 = __webpack_require__("meteor/check");
@@ -731,6 +887,7 @@ meteor_meteor__rspack_import_0.Meteor.methods({
 
 },
 "./imports/api/slots/slots.publications.js"(__unused_rspack_module, __unused_rspack___webpack_exports__, __webpack_require__) {
+"use strict";
 /* import */ var meteor_meteor__rspack_import_0 = __webpack_require__("meteor/meteor");
 /* import */ var meteor_meteor__rspack_import_0_default = /*#__PURE__*/__webpack_require__.n(meteor_meteor__rspack_import_0);
 /* import */ var meteor_check__rspack_import_1 = __webpack_require__("meteor/check");
@@ -774,6 +931,7 @@ meteor_meteor__rspack_import_0.Meteor.publish('slots.myDay', function({ date }) 
 
 },
 "./imports/api/users/users.methods.js"(__unused_rspack_module, __unused_rspack___webpack_exports__, __webpack_require__) {
+"use strict";
 /* import */ var meteor_meteor__rspack_import_0 = __webpack_require__("meteor/meteor");
 /* import */ var meteor_meteor__rspack_import_0_default = /*#__PURE__*/__webpack_require__.n(meteor_meteor__rspack_import_0);
 /* import */ var meteor_accounts_base__rspack_import_1 = __webpack_require__("meteor/accounts-base");
@@ -804,6 +962,7 @@ meteor_meteor__rspack_import_0.Meteor.methods({
 
 },
 "./imports/startup/server/accounts.js"(__unused_rspack_module, __unused_rspack___webpack_exports__, __webpack_require__) {
+"use strict";
 /* import */ var meteor_accounts_base__rspack_import_0 = __webpack_require__("meteor/accounts-base");
 /* import */ var meteor_accounts_base__rspack_import_0_default = /*#__PURE__*/__webpack_require__.n(meteor_accounts_base__rspack_import_0);
 
@@ -831,6 +990,7 @@ meteor_accounts_base__rspack_import_0.Accounts.onCreateUser((options, user)=>{
 
 },
 "./imports/utils/constants.js"(__unused_rspack_module, __webpack_exports__, __webpack_require__) {
+"use strict";
 __webpack_require__.d(__webpack_exports__, {
   APPOINTMENT_STATUS: () => (APPOINTMENT_STATUS)
 });
@@ -853,19 +1013,24 @@ const APPOINTMENT_STATUS = {
 
 },
 "./server/main.js"(__unused_rspack_module, __unused_rspack___webpack_exports__, __webpack_require__) {
+"use strict";
 /* import */ var meteor_meteor__rspack_import_0 = __webpack_require__("meteor/meteor");
 /* import */ var meteor_meteor__rspack_import_0_default = /*#__PURE__*/__webpack_require__.n(meteor_meteor__rspack_import_0);
 /* import */ var meteor_accounts_base__rspack_import_1 = __webpack_require__("meteor/accounts-base");
 /* import */ var meteor_accounts_base__rspack_import_1_default = /*#__PURE__*/__webpack_require__.n(meteor_accounts_base__rspack_import_1);
 /* import */ var _imports_api_appointments_appointments_js__rspack_import_2 = __webpack_require__("./imports/api/appointments/appointments.js");
-/* import */ var _imports_api_appointments_appointments_methods_js__rspack_import_3 = __webpack_require__("./imports/api/appointments/appointments.methods.js");
-/* import */ var _imports_api_appointments_appointments_publications_js__rspack_import_4 = __webpack_require__("./imports/api/appointments/appointments.publications.js");
-/* import */ var _imports_api_slots_slots_methods_js__rspack_import_5 = __webpack_require__("./imports/api/slots/slots.methods.js");
-/* import */ var _imports_api_slots_slots_publications_js__rspack_import_6 = __webpack_require__("./imports/api/slots/slots.publications.js");
-/* import */ var _imports_startup_server_accounts_js__rspack_import_7 = __webpack_require__("./imports/startup/server/accounts.js");
-/* import */ var _imports_api_users_users_methods_js__rspack_import_8 = __webpack_require__("./imports/api/users/users.methods.js");
-/* import */ var _imports_api_analytics_analytics_publications_js__rspack_import_9 = __webpack_require__("./imports/api/analytics/analytics.publications.js");
-/* import */ var _bot_seed_js__rspack_import_10 = __webpack_require__("./bot/seed.js");
+/* import */ var _imports_api_predictions_predictions_js__rspack_import_3 = __webpack_require__("./imports/api/predictions/predictions.js");
+/* import */ var _imports_api_appointments_appointments_methods_js__rspack_import_4 = __webpack_require__("./imports/api/appointments/appointments.methods.js");
+/* import */ var _imports_api_appointments_appointments_publications_js__rspack_import_5 = __webpack_require__("./imports/api/appointments/appointments.publications.js");
+/* import */ var _imports_api_slots_slots_methods_js__rspack_import_6 = __webpack_require__("./imports/api/slots/slots.methods.js");
+/* import */ var _imports_api_slots_slots_publications_js__rspack_import_7 = __webpack_require__("./imports/api/slots/slots.publications.js");
+/* import */ var _imports_startup_server_accounts_js__rspack_import_8 = __webpack_require__("./imports/startup/server/accounts.js");
+/* import */ var _imports_api_users_users_methods_js__rspack_import_9 = __webpack_require__("./imports/api/users/users.methods.js");
+/* import */ var _imports_api_analytics_analytics_publications_js__rspack_import_10 = __webpack_require__("./imports/api/analytics/analytics.publications.js");
+/* import */ var _imports_api_predictions_predictions_methods_js__rspack_import_11 = __webpack_require__("./imports/api/predictions/predictions.methods.js");
+/* import */ var _imports_api_predictions_predictions_publications_js__rspack_import_12 = __webpack_require__("./imports/api/predictions/predictions.publications.js");
+/* import */ var _imports_api_predictions_predictions_publications_js__rspack_import_12_default = /*#__PURE__*/__webpack_require__.n(_imports_api_predictions_predictions_publications_js__rspack_import_12);
+/* import */ var _bot_seed_js__rspack_import_13 = __webpack_require__("./bot/seed.js");
 function asyncGeneratorStep(gen, resolve, reject, _next, _throw, key, arg) {
     try {
         var info = gen[key](arg);
@@ -906,6 +1071,10 @@ function _async_to_generator(fn) {
 
 
 
+
+
+
+
 meteor_meteor__rspack_import_0.Meteor.startup(()=>_async_to_generator(function*() {
         const count = yield meteor_meteor__rspack_import_0.Meteor.users.find().countAsync();
         if (count === 0) {
@@ -918,29 +1087,37 @@ meteor_meteor__rspack_import_0.Meteor.startup(()=>_async_to_generator(function*(
                 }
             });
         }
-        // Correr seed si hay pocos datos históricos
         const totalAppointments = yield _imports_api_appointments_appointments_js__rspack_import_2.Appointments.find().countAsync();
         if (totalAppointments < 50) {
             console.log('📊 Iniciando generación de datos históricos...');
-            yield (0,_bot_seed_js__rspack_import_10.runSeed)();
+            yield (0,_bot_seed_js__rspack_import_13.runSeed)();
+        }
+        const totalPreds = yield _imports_api_predictions_predictions_js__rspack_import_3.Predictions.find().countAsync();
+        if (totalPreds === 0) {
+            console.log('🔮 Calculando predicciones iniciales...');
+            yield (0,_imports_api_predictions_predictions_methods_js__rspack_import_11.calcularPredicciones)();
         }
     })());
 
 
 },
 "meteor/accounts-base"(module) {
+"use strict";
 module.exports = require("meteor/accounts-base");
 
 },
 "meteor/check"(module) {
+"use strict";
 module.exports = require("meteor/check");
 
 },
 "meteor/meteor"(module) {
+"use strict";
 module.exports = require("meteor/meteor");
 
 },
 "meteor/mongo"(module) {
+"use strict";
 module.exports = require("meteor/mongo");
 
 },
@@ -1006,8 +1183,9 @@ __webpack_require__.r = (exports) => {
 };
 })();
 var __webpack_exports__ = {};
-// This entry needs to be wrapped in an IIFE because it needs to be isolated against other modules in the chunk.
+// This entry needs to be wrapped in an IIFE because it needs to be in strict mode.
 (() => {
+"use strict";
 __webpack_require__.r(__webpack_exports__);
 /* import */ var _server_main_js__rspack_import_0 = __webpack_require__("./server/main.js");
 /**
