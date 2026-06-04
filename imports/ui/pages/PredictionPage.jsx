@@ -1,16 +1,52 @@
+/**
+ * PredictionPage.jsx
+ * Página de predicciones de demanda de BarberTurn, accesible solo para barberos.
+ * Muestra las predicciones calculadas por el algoritmo, organizadas por día
+ * en tabs navegables, con alertas visuales para situaciones problemáticas.
+ *
+ * Estructura de la página:
+ *  1. Header: título, botón de Analytics y botón de recalcular predicciones
+ *  2. Banner de alertas: aparece si hay franjas con situación anómala
+ *  3. Tabs de días: un botón por día (Lun-Sáb) con badge de alertas si las hay
+ *  4. Tabla de franjas: por cada hora del día seleccionado, muestra:
+ *     - Hora, clientes esperados, barberos necesarios, ocupación histórica, estado/alerta
+ *
+ * Componentes auxiliares internos:
+ *  - AlertaBadge: badge coloreado que muestra el tipo de alerta de una franja
+ *  - FranjaRow: fila de la tabla con los datos de una franja horaria
+ *
+ * Hooks utilizados:
+ *  - usePredictions() → suscrito a 'predictions.all'; retorna datos agrupados por día
+ *  - useNavigate()    → para navegar a analytics
+ *
+ * Métodos Meteor que invoca:
+ *  - predictions.calculate → recalcula todas las predicciones desde el historial actual
+ */
 import React, { useState } from 'react';
 import { Meteor } from 'meteor/meteor';
 import { useNavigate } from 'react-router-dom';
 import { usePredictions } from '../hooks/usePredictions';
 
+/**
+ * ALERTA_CONFIG
+ * Configuración visual para cada tipo de alerta del sistema de predicciones.
+ * Define el color de texto, fondo y etiqueta para cada estado.
+ */
 const ALERTA_CONFIG = {
-  ok:             { color: '#10b981', bg: '#f0fdf4', label: '✅ Óptimo' },
-  demanda_alta:   { color: '#f59e0b', bg: '#fffbeb', label: '🔥 Demanda alta' },
-  overbooking:    { color: '#ef4444', bg: '#fef2f2', label: '🚨 Overbooking' },
-  sobrecapacidad: { color: '#6366f1', bg: '#eef2ff', label: '💤 Sobrecapacidad' },
+  ok:             { color: '#10b981', bg: '#f0fdf4', label: '✅ Óptimo' },        // Verde: situación normal
+  demanda_alta:   { color: '#f59e0b', bg: '#fffbeb', label: '🔥 Demanda alta' },   // Amarillo: ocupación > 85%
+  overbooking:    { color: '#ef4444', bg: '#fef2f2', label: '🚨 Overbooking' },    // Rojo: más clientes que barberos
+  sobrecapacidad: { color: '#6366f1', bg: '#eef2ff', label: '💤 Sobrecapacidad' }, // Púrpura: demasiados barberos para poca demanda
 };
 
+/**
+ * AlertaBadge
+ * Badge inline que muestra el tipo de alerta con su color y etiqueta correspondiente.
+ *
+ * @param {String} alerta - Código de alerta: 'ok' | 'demanda_alta' | 'overbooking' | 'sobrecapacidad'
+ */
 function AlertaBadge({ alerta }) {
+  // Usar la configuración del tipo de alerta; caer en 'ok' si el código no está definido
   const cfg = ALERTA_CONFIG[alerta] || ALERTA_CONFIG.ok;
   return (
     <span style={{
@@ -24,37 +60,56 @@ function AlertaBadge({ alerta }) {
   );
 }
 
+/**
+ * FranjaRow
+ * Fila de la tabla de predicciones que muestra todos los datos de una franja horaria.
+ * El fondo y borde de la fila cambian de color si la franja tiene una alerta activa.
+ *
+ * @param {Object} franja - Documento de predicción con hora, métricas y tipo de alerta
+ */
 function FranjaRow({ franja }) {
   const cfg = ALERTA_CONFIG[franja.alerta] || ALERTA_CONFIG.ok;
   return (
+    // Grid de 5 columnas: hora | clientes esperados | barberos | ocupación | estado
     <div style={{
       display: 'grid',
       gridTemplateColumns: '80px 1fr 1fr 1fr 140px',
       gap: 12, alignItems: 'center',
       padding: '10px 16px',
+      // Resaltar el fondo si hay una alerta activa; blanco si está 'ok'
       background: franja.alerta !== 'ok' ? cfg.bg : '#fff',
       borderRadius: 6, marginBottom: 4,
+      // Borde coloreado para alertas, gris claro para franjas normales
       border: `1px solid ${franja.alerta !== 'ok' ? cfg.color : '#e5e7eb'}`,
     }}>
+      {/* Columna 1: Hora de la franja */}
       <span style={{ fontWeight: 'bold', color: '#374151' }}>🕐 {franja.hora}</span>
+
+      {/* Columna 2: Clientes esperados (promedio histórico por semana) */}
       <div style={{ textAlign: 'center' }}>
         <p style={{ margin: 0, fontSize: 18, fontWeight: 'bold', color: '#6366f1' }}>
           {franja.clientesEsperados}
         </p>
         <p style={{ margin: 0, fontSize: 11, color: '#9ca3af' }}>clientes esperados</p>
       </div>
+
+      {/* Columna 3: Barberos recomendados para cubrir la demanda */}
       <div style={{ textAlign: 'center' }}>
         <p style={{ margin: 0, fontSize: 18, fontWeight: 'bold', color: '#10b981' }}>
           {franja.barberosRecomendados}
         </p>
         <p style={{ margin: 0, fontSize: 11, color: '#9ca3af' }}>barberos necesarios</p>
       </div>
+
+      {/* Columna 4: Ocupación histórica en porcentaje */}
       <div style={{ textAlign: 'center' }}>
         <p style={{ margin: 0, fontSize: 18, fontWeight: 'bold', color: '#f59e0b' }}>
           {(franja.ocupacionHistorica * 100).toFixed(0)}%
         </p>
         <p style={{ margin: 0, fontSize: 11, color: '#9ca3af' }}>ocupación histórica</p>
       </div>
+
+      {/* Columna 5: Badge de estado/alerta */}
       <AlertaBadge alerta={franja.alerta} />
     </div>
   );
@@ -62,44 +117,59 @@ function FranjaRow({ franja }) {
 
 export function PredictionPage() {
   const navigate = useNavigate();
+  // Obtener las predicciones agrupadas por día y los contadores de alertas
   const { isLoading, porDia, totalAlertas, totalOverbooking } = usePredictions();
+
+  // Día activo en los tabs (1=Lunes por defecto al cargar la página)
   const [diaActivo, setDiaActivo] = useState(1);
+  // Estado de carga del botón de recalcular para deshabilitar mientras procesa
   const [calculando, setCalculando] = useState(false);
 
+  /**
+   * recalcular
+   * Invoca el método del servidor que recalcula todas las predicciones
+   * basándose en el historial actual de appointments.
+   * Deshabilita el botón mientras procesa para evitar llamadas duplicadas.
+   */
   const recalcular = () => {
     setCalculando(true);
     Meteor.call('predictions.calculate', (err) => {
-      setCalculando(false);
+      setCalculando(false);  // Rehabilitar el botón al terminar (éxito o error)
       if (err) alert(err.reason);
     });
   };
 
+  // Mostrar indicador de carga mientras la suscripción no ha terminado
   if (isLoading) return (
     <div style={{ textAlign: 'center', padding: 80 }}>
       <p style={{ color: '#9ca3af' }}>Cargando predicciones...</p>
     </div>
   );
 
+  // Encontrar los datos del día actualmente seleccionado en los tabs
   const diaSeleccionado = porDia.find(d => d.dia === diaActivo);
 
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', padding: 24, fontFamily: 'Arial, sans-serif' }}>
 
-      {/* Header */}
+      {/* Header: título con semanas de historial, botones de analytics y recalcular */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <div>
           <h1 style={{ margin: 0 }}>🔮 Predicciones — BarberTurn</h1>
+          {/* Mostrar cuántas semanas de historial se usaron para el cálculo */}
           <p style={{ margin: 0, color: '#6b7280' }}>
             Recomendación de plantilla basada en {porDia[0]?.franjas[0]?.semanasTomadas || 0} semanas de historial
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          {/* Botón de navegación a la página de analytics */}
           <button onClick={() => navigate('/analytics')} style={{
             background: 'transparent', border: '1px solid #e5e7eb',
             borderRadius: 6, padding: '8px 16px', cursor: 'pointer',
           }}>
             📊 Analytics
           </button>
+          {/* Botón de recalcular: deshabilitado mientras procesa */}
           <button onClick={recalcular} disabled={calculando} style={{
             background: calculando ? '#e5e7eb' : '#6366f1',
             color: calculando ? '#9ca3af' : '#fff',
@@ -111,7 +181,7 @@ export function PredictionPage() {
         </div>
       </div>
 
-      {/* Resumen de alertas */}
+      {/* Banner de alertas: solo visible cuando hay franjas con situación anómala */}
       {totalAlertas > 0 && (
         <div style={{
           background: '#fef2f2', border: '1px solid #ef4444',
@@ -130,23 +200,25 @@ export function PredictionPage() {
         </div>
       )}
 
-      {/* Tabs por día */}
+      {/* Tabs de navegación por día de semana (Lunes a Sábado) */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
         {porDia.map(d => (
           <button
             key={d.dia}
-            onClick={() => setDiaActivo(d.dia)}
+            onClick={() => setDiaActivo(d.dia)}  // Cambiar el día activo al hacer clic
             style={{
               padding: '8px 16px', borderRadius: 8,
               border: '2px solid',
+              // Resaltar el tab del día activo en púrpura
               borderColor: diaActivo === d.dia ? '#6366f1' : '#e5e7eb',
-              background: diaActivo === d.dia ? '#6366f1' : '#fff',
-              color: diaActivo === d.dia ? '#fff' : '#374151',
+              background:  diaActivo === d.dia ? '#6366f1' : '#fff',
+              color:       diaActivo === d.dia ? '#fff'    : '#374151',
               cursor: 'pointer', fontWeight: 'bold',
               position: 'relative',
             }}
           >
             {d.nombre}
+            {/* Badge rojo con contador de alertas si el día tiene franjas problemáticas */}
             {d.alertas > 0 && (
               <span style={{
                 position: 'absolute', top: -6, right: -6,
@@ -163,9 +235,10 @@ export function PredictionPage() {
         ))}
       </div>
 
-      {/* Franjas del día seleccionado */}
+      {/* Tabla de franjas del día seleccionado */}
       {diaSeleccionado && (
         <div style={{ background: '#f9fafb', borderRadius: 12, padding: 20 }}>
+          {/* Cabecera de la sección con el nombre del día y el pico de demanda */}
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
             <h2 style={{ margin: 0 }}>{diaSeleccionado.nombre}</h2>
             <span style={{ color: '#6b7280', fontSize: 14, alignSelf: 'center' }}>
@@ -173,7 +246,7 @@ export function PredictionPage() {
             </span>
           </div>
 
-          {/* Header de columnas */}
+          {/* Encabezados de columnas de la tabla */}
           <div style={{
             display: 'grid',
             gridTemplateColumns: '80px 1fr 1fr 1fr 140px',
@@ -184,7 +257,9 @@ export function PredictionPage() {
             ))}
           </div>
 
+          {/* Filas de predicción: una por franja horaria del día */}
           {diaSeleccionado.franjas.map(f => (
+            // Clave compuesta para identificar unívocamente la franja día+hora
             <FranjaRow key={`${f.diaSemana}-${f.hora}`} franja={f} />
           ))}
         </div>
