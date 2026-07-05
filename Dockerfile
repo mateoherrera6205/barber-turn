@@ -23,13 +23,23 @@ RUN meteor build --directory /build --server-only
 ###############################################################################
 # Stage 2 — Runtime
 ###############################################################################
-FROM zodern/meteor
+FROM node:22-bookworm
 
-COPY --from=builder --chown=app:app /build/bundle /built_app
+ENV NODE_ENV=production
 
+WORKDIR /built_app
+
+# Copiar el bundle compilado desde la etapa builder
+COPY --from=builder /build/bundle /built_app
+
+# Instalar dependencias de producción del bundle
 RUN cd /built_app/programs/server && npm install --omit=dev
 
-# Fix Meteor 3: escribe en shrinkwrap.json en runtime
+# Fix Meteor 3: necesita escribir en shrinkwrap.json en runtime
 RUN chmod a+rw /built_app/programs/server/shrinkwrap.json || true
 
 EXPOSE 3000
+
+# El entrypoint del bundle de Meteor es main.js en la raíz del bundle.
+# Antes lo arrancaba la imagen zodern/meteor; ahora hay que declararlo.
+CMD ["node", "main.js"]
