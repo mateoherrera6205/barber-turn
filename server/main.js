@@ -16,27 +16,31 @@ import { runSeed } from '../bot/seed';
 import { calcularPredicciones } from '../imports/api/predictions/predictions.methods';
 
 Meteor.startup(async () => {
-  const count = await Meteor.users.find().countAsync();
-  if (count === 0) {
-    await Accounts.createUser({
-      email: 'barbero@demo.com',
-      password: '123456',
-      profile: { name: 'Carlos el Barbero', role: 'barbero' }
-    });
-  }
-
-  const totalAppointments = await Appointments.find().countAsync();
-  if (totalAppointments < 50) {
-    console.log('📊 Iniciando generación de datos históricos...');
-    await runSeed();
-  }
-
-  const totalPreds = await Predictions.find().countAsync();
-  if (totalPreds === 0) {
-    console.log('Calculando predicciones iniciales...');
-    const barbero = await Meteor.users.findOneAsync({ 'profile.role': 'barbero' });
-    if (barbero) {
-      await Meteor.callAsync('predictions.calculate');
+  try {
+    const count = await Meteor.users.find().countAsync();
+    if (count === 0) {
+      await Accounts.createUser({
+        email: 'barbero@demo.com',
+        password: '123456',
+        profile: { name: 'Carlos el Barbero', role: 'barbero' }
+      });
     }
+
+    const totalAppointments = await Appointments.find().countAsync();
+    if (totalAppointments < 50) {
+      console.log('📊 Iniciando generación de datos históricos...');
+      await runSeed();
+    }
+
+    const totalPreds = await Predictions.find().countAsync();
+    if (totalPreds === 0) {
+      console.log('Calculando predicciones iniciales...');
+      const barbero = await Meteor.users.findOneAsync({ 'profile.role': 'barbero' });
+      if (barbero) {
+        await calcularPredicciones();
+      }
+    }
+  } catch (err) {
+    console.error('Error durante el startup (seed/predicciones):', err);
   }
 });
