@@ -17,7 +17,6 @@ typescript@5.10.0              # Enable TypeScript syntax in .ts and .tsx module
 shell-server@0.7.0            # Server-side component of the `meteor shell` command
 hot-module-replacement@0.6.0  # Update client in development without reloading the page
 
-insecure@1.0.8                # Allow all DB writes from clients (for prototyping)
 static-html@1.5.0             # Define static page content in .html files
 react-meteor-data       # React higher-order component for reactively tracking Meteor data
 
