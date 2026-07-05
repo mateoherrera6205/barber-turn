@@ -1,0 +1,25 @@
+.git
+.gitignore
+.github
+
+# Caché local de Meteor
+.meteor/local
+
+# Dependencias locales
+node_modules
+
+# Build anterior
+_build
+
+# Tests
+tests
+
+# Docs
+*.md
+
+# Env locales
+.env
+.env.*
+
+.vscode
+.idea
