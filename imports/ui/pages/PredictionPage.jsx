@@ -202,6 +202,12 @@ export function PredictionPage() {
           }}>
             📊 Analytics
           </button>
+          <button onClick={() => navigate('/planner')} style={{
+            background: 'transparent', border: '1px solid #e5e7eb',
+            borderRadius: 6, padding: '8px 16px', cursor: 'pointer',
+          }}>
+            🗓️ Planificador
+          </button>
           {/* Botón de recalcular: deshabilitado mientras procesa */}
           <button onClick={recalcular} disabled={calculando} style={{
             background: calculando ? '#e5e7eb' : '#6366f1',

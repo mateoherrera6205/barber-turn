@@ -206,4 +206,55 @@ if (Meteor.isServer) {
 
   });
 
+  // ─────────────────────────────────────────────────────────────────────
+  describe('Planificador — slots.unassign', function () {
+
+    let testUserId;
+
+    beforeEach(async function () {
+      await Slots.removeAsync({});
+      // Crear usuario barbero de prueba directamente en la colección
+      await Meteor.users.removeAsync({ 'profile.role': 'barbero', 'profile.name': 'Barbero Planner Test' });
+      testUserId = await Meteor.users.insertAsync({
+        emails: [{ address: `planner-test-${Date.now()}@test.com`, verified: false }],
+        profile: { name: 'Barbero Planner Test', role: 'barbero' },
+        createdAt: new Date(),
+      });
+    });
+
+    afterEach(async function () {
+      await Slots.removeAsync({});
+      if (testUserId) await Meteor.users.removeAsync(testUserId);
+    });
+
+    it('slots.unassign con slot ocupado lanza slot-ocupado y no elimina el slot', async function () {
+      const fecha = new Date('2026-07-10T05:00:00.000Z');
+      const slotId = await Slots.insertAsync({
+        barberId:      testUserId,
+        date:          fecha,
+        hour:          '10:00',
+        isAvailable:   false,         // slot ocupado por una reserva
+        appointmentId: 'appt-fake-001',
+        createdAt:     new Date(),
+      });
+
+      const handler = Meteor.server.method_handlers['slots.unassign'];
+      let errorCapturado = null;
+      try {
+        await handler.call({ userId: testUserId }, { barberId: testUserId, date: fecha, hour: '10:00' });
+      } catch (err) {
+        errorCapturado = err;
+      }
+
+      // Debe lanzar Meteor.Error con error === 'slot-ocupado'
+      assert.ok(errorCapturado, 'debe lanzarse un error al desasignar un slot ocupado');
+      assert.strictEqual(errorCapturado.error, 'slot-ocupado', 'el código de error debe ser slot-ocupado');
+
+      // El slot no debe haberse eliminado
+      const slotDespues = await Slots.findOneAsync(slotId);
+      assert.ok(slotDespues, 'el slot debe seguir existiendo tras el intento fallido');
+    });
+
+  });
+
 }

@@ -71,6 +71,12 @@ export function DashboardPage() {
           }}>
             🔮 Predicciones
           </button>
+          <button onClick={() => navigate('/planner')} style={{
+            background: 'transparent', border: '1px solid #e5e7eb',
+            borderRadius: 6, padding: '8px 16px', cursor: 'pointer',
+          }}>
+            🗓️ Planificador
+          </button>
         </div>
       </div>
 

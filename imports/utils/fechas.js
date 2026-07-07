@@ -1,11 +1,24 @@
 /**
  * fechas.js
- * Utilidades de fecha para BarberTurn: calcula la próxima ocurrencia de un
- * día de semana y formatea fechas en español para la UI de predicciones.
+ * Utilidades de fecha para BarberTurn: normalización UTC, próxima ocurrencia
+ * de un día de semana y formateo en español para la UI de predicciones.
  *
  * Los números de día siguen la convención del sistema (1=Lun … 6=Sáb),
  * que coincide con JS getDay() para Lunes–Sábado (JS: 0=Dom, 1=Lun … 6=Sáb).
  */
+
+/**
+ * normalizarFecha
+ * Normaliza una fecha a las 05:00:00 UTC — convención del sistema (seed, BookingPage).
+ * Úsala en métodos de servidor y hooks antes de comparar o almacenar fechas de slot.
+ * @param {Date} date
+ * @returns {Date} nueva instancia con UTC 05:00:00.000
+ */
+export const normalizarFecha = (date) => {
+  const d = new Date(date);
+  d.setUTCHours(5, 0, 0, 0);
+  return d;
+};
 
 /**
  * proximaFecha

@@ -6,6 +6,7 @@
  * Publicaciones disponibles:
  *  - slots.available → Slots libres en una fecha dada (para clientes que reservan)
  *  - slots.myDay     → Todos los slots de un barbero en una fecha (para su dashboard)
+ *  - planner.week    → Slots de todos los barberos en los próximos 7 días (planificador)
  */
 import { Meteor } from 'meteor/meteor';
 import { check } from 'meteor/check';
@@ -73,4 +74,32 @@ Meteor.publish('slots.myDay', function({ date }) {
     barberId: this.userId,
     date: { $gte: start, $lte: end },
   });
+});
+
+/**
+ * planner.week
+ * Publica todos los slots de cualquier barbero en los próximos 7 días
+ * y los perfiles de barberos (solo nombre y rol) para que el planificador
+ * pueda mostrar quién está asignado en cada franja y permitir asignar/desasignar.
+ *
+ * @returns {Array<Cursor>} [Slots próximos 7 días, perfiles de barberos]
+ */
+Meteor.publish('planner.week', function() {
+  if (!this.userId) return this.ready();
+
+  const hoy = new Date();
+  hoy.setUTCHours(0, 0, 0, 0);
+
+  // Fin exclusivo: medianoche UTC del día 7 (cubre hoy+0 … hoy+6 completos)
+  const fin = new Date(hoy);
+  fin.setDate(fin.getDate() + 7);
+
+  return [
+    Slots.find({ date: { $gte: hoy, $lt: fin } }),
+    // Solo nombre y rol de barberos — sin emails ni services
+    Meteor.users.find(
+      { 'profile.role': 'barbero' },
+      { fields: { 'profile.name': 1, 'profile.role': 1 } }
+    ),
+  ];
 });

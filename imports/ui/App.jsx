@@ -28,6 +28,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { BookingPage } from './pages/BookingPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { PredictionPage } from './pages/PredictionPage';
+import { PlannerPage } from './pages/PlannerPage';
 import { PrivateRoute } from './components/PrivateRoute';
 
 export function App() {
@@ -48,6 +49,9 @@ export function App() {
         } />
         <Route path="/predictions" element={
           <PrivateRoute requiredRole="barbero"><PredictionPage /></PrivateRoute>
+        } />
+        <Route path="/planner" element={
+          <PrivateRoute requiredRole="barbero"><PlannerPage /></PrivateRoute>
         } />
 
         {/* Ruta protegida para clientes: redirige a /dashboard si el usuario es barbero */}
