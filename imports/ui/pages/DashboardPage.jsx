@@ -57,13 +57,21 @@ export function DashboardPage() {
           <h1 style={{ margin: 0 }}>💈 BarberTurn</h1>
           <p style={{ margin: 0, color: '#6b7280' }}>Hola, {name}</p>
         </div>
-        {/* Botón que navega a la página de analytics histórico */}
-        <button onClick={handleAnalytics} style={{
-          background: 'transparent', border: '1px solid #e5e7eb',
-          borderRadius: 6, padding: '8px 16px', cursor: 'pointer',
-        }}>
-          Analytics
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {/* Botón que navega a la página de analytics histórico */}
+          <button onClick={handleAnalytics} style={{
+            background: 'transparent', border: '1px solid #e5e7eb',
+            borderRadius: 6, padding: '8px 16px', cursor: 'pointer',
+          }}>
+            Analytics
+          </button>
+          <button onClick={() => navigate('/predictions')} style={{
+            background: 'transparent', border: '1px solid #e5e7eb',
+            borderRadius: 6, padding: '8px 16px', cursor: 'pointer',
+          }}>
+            🔮 Predicciones
+          </button>
+        </div>
       </div>
 
       {/* Stats rápidas: tarjetas con contadores del día actual */}

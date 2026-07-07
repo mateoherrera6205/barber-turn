@@ -101,12 +101,20 @@ export function AnalyticsPage() {
           <h1 style={{ margin: 0 }}>📊 Analytics — BarberTurn</h1>
           <p style={{ margin: 0, color: '#6b7280' }}>Comportamiento histórico del sistema</p>
         </div>
-        <button onClick={() => navigate('/dashboard')} style={{
-          background: 'transparent', border: '1px solid #e5e7eb',
-          borderRadius: 6, padding: '8px 16px', cursor: 'pointer',
-        }}>
-          ← Dashboard
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => navigate('/dashboard')} style={{
+            background: 'transparent', border: '1px solid #e5e7eb',
+            borderRadius: 6, padding: '8px 16px', cursor: 'pointer',
+          }}>
+            ← Dashboard
+          </button>
+          <button onClick={() => navigate('/predictions')} style={{
+            background: 'transparent', border: '1px solid #e5e7eb',
+            borderRadius: 6, padding: '8px 16px', cursor: 'pointer',
+          }}>
+            🔮 Predicciones
+          </button>
+        </div>
       </div>
 
       {/* Stats generales: 4 tarjetas con KPIs globales del sistema */}

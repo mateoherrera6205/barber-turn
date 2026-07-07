@@ -162,6 +162,13 @@ export function PredictionPage() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          {/* Botón de regreso al dashboard */}
+          <button onClick={() => navigate('/dashboard')} style={{
+            background: 'transparent', border: '1px solid #e5e7eb',
+            borderRadius: 6, padding: '8px 16px', cursor: 'pointer',
+          }}>
+            ← Dashboard
+          </button>
           {/* Botón de navegación a la página de analytics */}
           <button onClick={() => navigate('/analytics')} style={{
             background: 'transparent', border: '1px solid #e5e7eb',
