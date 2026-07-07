@@ -4,12 +4,14 @@
  * Genera 8 semanas de turnos y reservas simulando el comportamiento real de
  * clientes y barberos, con patrones de demanda variables según día y hora.
  *
- * El algoritmo simula:
- *  - 3 barberos con horarios distintos (algunos trabajan menos días u horas)
- *  - 8 clientes con preferencias de días y horas, y frecuencias de visita distintas
- *  - Variabilidad aleatoria en la demanda por día de la semana
- *  - Ruido aleatorio para simular comportamiento humano impredecible
- *  - Estados realistas: 75% confirmed, 15% cancelled, 10% pending
+ * Desde v2, la mezcla de cancelaciones por día se calibra con el dataset real
+ * private/data/Client_Cancellations0.csv. Si el archivo no existe o falla el
+ * parseo, el seed cae al comportamiento anterior (valores hardcodeados) con
+ * un console.warn y nunca rompe el startup.
+ *
+ * Clientes:
+ *  - 3 cuentas demo con login (juan/maria/sofia @test.com) para BookingPage.
+ *  - Hasta 25 códigos del dataset como clientName sin cuenta Meteor.
  *
  * Este script es ejecutado en server/main.js cuando la BD tiene menos de 50 appointments.
  */
@@ -17,237 +19,185 @@ import { Accounts } from 'meteor/accounts-base';
 import { Meteor } from 'meteor/meteor';
 import { Slots } from '/imports/api/slots/slots';
 import { Appointments } from '/imports/api/appointments/appointments';
+import { loadDataset } from '/imports/startup/server/cancellationsDataset';
 
-/**
- * CLIENTES
- * Datos de los 8 clientes simulados, cada uno con un patrón de comportamiento:
- *  - diasFavoritos:  días de la semana que prefiere (1=Lun... 6=Sáb)
- *  - horasFavoritas: franjas horarias que prefiere
- *  - frecuencia:     probabilidad base de que el cliente reserve (0 a 1)
- *
- * El patrón define cómo el algoritmo calcProb() ajusta la probabilidad de reserva.
- */
-const CLIENTES = [
-  { email: 'juan@test.com',    name: 'Juan Pérez',     phone: '0991111111',
-    patron: { diasFavoritos: [5,6],    horasFavoritas: ['09:00','10:00'], frecuencia: 0.8 }},
-  { email: 'maria@test.com',   name: 'María García',   phone: '0992222222',
-    patron: { diasFavoritos: [3,4],    horasFavoritas: ['14:00','15:00'], frecuencia: 0.6 }},
-  { email: 'andres@test.com',  name: 'Andrés Torres',  phone: '0993333333',
-    patron: { diasFavoritos: [1,2],    horasFavoritas: ['11:00','12:00'], frecuencia: 0.4 }},
-  { email: 'sofia@test.com',   name: 'Sofía Ruiz',     phone: '0994444444',
-    patron: { diasFavoritos: [5,6],    horasFavoritas: ['16:00','17:00'], frecuencia: 0.75 }},
-  { email: 'diego@test.com',   name: 'Diego Castro',   phone: '0995555555',
-    patron: { diasFavoritos: [4,5],    horasFavoritas: ['10:00','11:00'], frecuencia: 0.65 }},
-  { email: 'lucia@test.com',   name: 'Lucía Mora',     phone: '0996666666',
-    patron: { diasFavoritos: [2,3],    horasFavoritas: ['09:00','14:00'], frecuencia: 0.5 }},
-  { email: 'carlosc@test.com', name: 'Carlos Vega',    phone: '0997777777',
-    patron: { diasFavoritos: [6],      horasFavoritas: ['10:00','11:00','12:00'], frecuencia: 0.9 }},
-  { email: 'ana@test.com',     name: 'Ana Flores',     phone: '0998888888',
-    patron: { diasFavoritos: [1,3,5],  horasFavoritas: ['15:00','16:00'], frecuencia: 0.55 }},
+// ─── Fallbacks (se usan si el dataset no se puede cargar) ─────────────────
+// Nombres reales del dataset (top 4 por frecuencia: JJ 70, BECKY 61, JOANNE 45, KELLY 44)
+const STAFF_DEFAULT = ['JJ', 'BECKY', 'JOANNE', 'KELLY'];
+const TASA_CANCEL_DEFAULT = { 1: 0.15, 2: 0.15, 3: 0.15, 4: 0.15, 5: 0.15, 6: 0.15 };
+
+// ─── Horarios: 4 plantillas variadas asignadas por posición de staff ───────
+const HORARIOS = [
+  // Jornada completa (6 días)
+  { dias: [1,2,3,4,5,6], horas: ['09:00','10:00','11:00','12:00','14:00','15:00','16:00','17:00'] },
+  // Lunes a viernes, turno de mañana/tarde
+  { dias: [1,2,3,4,5],   horas: ['09:00','10:00','11:00','14:00','15:00','16:00'] },
+  // Miércoles a sábado, turno de tarde
+  { dias: [3,4,5,6],     horas: ['10:00','11:00','12:00','15:00','16:00','17:00'] },
+  // Martes a sábado, turno reducido
+  { dias: [2,3,4,5,6],   horas: ['09:00','10:00','14:00','15:00','16:00'] },
 ];
 
-/**
- * BARBEROS
- * Datos de los 3 barberos simulados, cada uno con un horario de trabajo:
- *  - dias:  días laborables (1=Lun... 6=Sáb)
- *  - horas: franjas horarias en las que trabaja
- *
- * Carlos trabaja todos los días, Luis de lunes a viernes, Pedro miércoles a sábado.
- */
-const BARBEROS = [
-  { email: 'carlos@barberturn.com', name: 'Carlos Mendoza',
-    horario: { dias: [1,2,3,4,5,6], horas: ['09:00','10:00','11:00','12:00','14:00','15:00','16:00','17:00'] }},
-  { email: 'luis@barberturn.com',   name: 'Luis Paredes',
-    horario: { dias: [1,2,3,4,5],   horas: ['09:00','10:00','11:00','14:00','15:00','16:00'] }},
-  { email: 'pedro@barberturn.com',  name: 'Pedro Vásquez',
-    horario: { dias: [3,4,5,6],     horas: ['10:00','11:00','12:00','15:00','16:00','17:00'] }},
+// ─── Clientes demo con cuenta Meteor (para login en BookingPage) ───────────
+const DEMO_CLIENTES = [
+  { email: 'juan@test.com',  name: 'Juan Pérez',   phone: '0991111111',
+    patron: { diasFavoritos: [5,6], horasFavoritas: ['09:00','10:00'], frecuencia: 0.8 }},
+  { email: 'maria@test.com', name: 'María García', phone: '0992222222',
+    patron: { diasFavoritos: [3,4], horasFavoritas: ['14:00','15:00'], frecuencia: 0.6 }},
+  { email: 'sofia@test.com', name: 'Sofía Ruiz',   phone: '0994444444',
+    patron: { diasFavoritos: [5,6], horasFavoritas: ['16:00','17:00'], frecuencia: 0.75 }},
 ];
 
-/**
- * DEMANDA_DIA
- * Factor multiplicador de demanda base por día de semana.
- * Refleja la tendencia real en barberías: los fines de semana tienen más demanda.
- *  - Lunes (1): 25% → día de menor demanda
- *  - Sábado (6): 90% → día de máxima demanda
- */
-const DEMANDA_DIA = { 1:0.25, 2:0.35, 3:0.55, 4:0.60, 5:0.85, 6:0.90 };
+// ─── Patrón de comportamiento determinista por código del dataset ──────────
+const DIAS_OPTS  = [[5,6],[1,2],[3,4],[4,5],[2,3,6],[1,3,5],[2,4,6]];
+const HORAS_OPTS = [['09:00','10:00'],['11:00','12:00'],['14:00','15:00'],['16:00','17:00'],['10:00','14:00']];
 
-/**
- * fechaUTC5
- * Normaliza una fecha a las 05:00:00.000 UTC, que equivale a medianoche (00:00)
- * en la zona horaria UTC-5 (Ecuador). Esto garantiza que las fechas almacenadas
- * en la BD sean comparables entre sí sin problemas de zona horaria.
- *
- * @param {Date} date - Fecha a normalizar
- * @returns {Date} Nueva fecha con hora establecida a 05:00 UTC
- */
+const hashCode = (str) => {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = ((h << 5) - h + str.charCodeAt(i)) | 0;
+  return Math.abs(h);
+};
+
+const patronDesde = (code) => {
+  const h = hashCode(code);
+  return {
+    diasFavoritos:  DIAS_OPTS[h % DIAS_OPTS.length],
+    horasFavoritas: HORAS_OPTS[(h >>> 3) % HORAS_OPTS.length],
+    frecuencia:     0.30 + (h % 70) / 100, // 0.30–0.99, determinista
+  };
+};
+
+// ─── Factor de demanda por día ─────────────────────────────────────────────
+const DEMANDA_DIA = { 1: 0.25, 2: 0.35, 3: 0.55, 4: 0.60, 5: 0.85, 6: 0.90 };
+
 const fechaUTC5 = (date) => {
   const d = new Date(date);
   d.setUTCHours(5, 0, 0, 0);
   return d;
 };
 
-/**
- * calcProb
- * Calcula la probabilidad de que un cliente específico reserve un slot
- * en un día y hora determinados. Combina múltiples factores:
- *
- * Factores que aumentan o reducen la probabilidad:
- *  1. esDiaFav:    si el día está en los diasFavoritos del cliente → ×1.3, si no → ×0.7
- *  2. esHoraFav:   si la hora está en horasFavoritas → ×1.4, si no → ×0.6
- *  3. demandaBase: factor de demanda del día (DEMANDA_DIA) para simular más reservas en fin de semana
- *  4. ruido:       valor aleatorio entre 0.85 y 1.15 para simular variabilidad humana
- *
- * La fórmula final: min(frecuencia × esDiaFav × esHoraFav × demandaBase × ruido, 1)
- * Se aplica min(…, 1) para que la probabilidad nunca supere 100%.
- *
- * @param {Object} cliente   - Objeto cliente con su campo 'patron'
- * @param {Number} diaSemana - Día de semana (1=Lun... 6=Sáb)
- * @param {String} hora      - Hora en formato 'HH:MM'
- * @returns {Number} Probabilidad de reserva entre 0 y 1
- */
 const calcProb = (cliente, diaSemana, hora) => {
   const { diasFavoritos, horasFavoritas, frecuencia } = cliente.patron;
-
-  // Multiplicador por preferencia de día: si es día favorito se amplifica la probabilidad
-  const esDiaFav  = diasFavoritos.includes(diaSemana)  ? 1.3 : 0.7;
-
-  // Multiplicador por preferencia de hora: si es hora favorita se amplifica la probabilidad
-  const esHoraFav = horasFavoritas.includes(hora)       ? 1.4 : 0.6;
-
-  // Factor de demanda del día de semana (simulación de comportamiento real de barbería)
+  const esDiaFav   = diasFavoritos.includes(diaSemana) ? 1.3 : 0.7;
+  const esHoraFav  = horasFavoritas.includes(hora)      ? 1.4 : 0.6;
   const demandaBase = DEMANDA_DIA[diaSemana] || 0.5;
-
-  // Ruido aleatorio entre 0.85 y 1.15 para simular la variabilidad humana impredecible
-  const ruido = 0.85 + Math.random() * 0.3;
-
-  // Probabilidad final como producto de todos los factores, acotada a [0, 1]
+  const ruido       = 0.85 + Math.random() * 0.3;
   return Math.min(frecuencia * esDiaFav * esHoraFav * demandaBase * ruido, 1);
 };
 
 /**
  * decidirStatus
- * Determina el estado final de una reserva (o si no se reserva) basándose
- * en la probabilidad calculada por calcProb y un generador de números aleatorios.
+ * La probabilidad de cancelación ya no es fija: usa tasaCancelacionPorDia del
+ * dataset (vs. 15% fijo anterior). El 10% pending se mantiene constante.
  *
- * Lógica:
- *  - Si Math.random() > prob → el cliente no reserva (retorna null)
- *  - Si reserva (Math.random() ≤ prob), se decide el estado:
- *      · 75% de probabilidad → 'confirmed' (la mayoría se confirman)
- *      · 15% de probabilidad → 'cancelled' (algunos se cancelan)
- *      · 10% de probabilidad → 'pending'   (minoría queda pendiente)
- *
- * @param {Number} prob - Probabilidad de reserva entre 0 y 1
- * @returns {String|null} Estado del turno: 'confirmed' | 'cancelled' | 'pending' | null
+ * @param {Number} prob
+ * @param {Number} diaSemana
+ * @param {Object} tasaCancelPorDia
+ * @returns {'confirmed'|'cancelled'|'pending'|null}
  */
-const decidirStatus = (prob) => {
-  // Si el número aleatorio supera la probabilidad, el cliente no reserva
+const decidirStatus = (prob, diaSemana, tasaCancelPorDia) => {
   if (Math.random() > prob) return null;
-
-  // Decidir el estado de la reserva según distribución probabilística
+  const tasaCancel = tasaCancelPorDia[diaSemana] ?? 0.15;
   const r = Math.random();
-  if (r < 0.75) return 'confirmed';   // 75%: reserva confirmada
-  if (r < 0.90) return 'cancelled';   // 15%: reserva cancelada (0.75 a 0.90)
-  return 'pending';                    // 10%: reserva pendiente (0.90 a 1.00)
+  if (r < 1 - tasaCancel - 0.10) return 'confirmed';
+  if (r < 1 - 0.10)              return 'cancelled';
+  return 'pending';
 };
 
 /**
  * runSeed
- * Función principal del seed que ejecuta todo el proceso de generación de datos.
- * Se llama desde server/main.js si la BD tiene menos de 50 appointments.
- *
- * Flujo de ejecución:
- *  1. Crear o recuperar los usuarios de los 3 barberos
- *  2. Crear o recuperar los usuarios de los 8 clientes
- *  3. Generar 8 semanas de historial (desde hace 8 semanas hasta hoy)
- *     Para cada día laborable de cada semana:
- *       a. Para cada barbero que trabaja ese día (con 5% de probabilidad de falta)
- *         b. Para cada hora del barbero (con 10% de probabilidad de slot vacío):
- *           - Crear el slot si no existe
- *           - Mezclar aleatoriamente los clientes y probar si alguno reserva
- *           - Si un cliente reserva, crear el appointment y marcar el slot como ocupado
- *           - Solo un cliente puede ocupar cada slot (slotOcupado = true)
- *
- * @returns {void} Imprime estadísticas finales en consola
+ * Función principal del seed. Se llama desde server/main.js si la BD tiene
+ * menos de 50 appointments.
  */
 export const runSeed = async () => {
-  console.log('🌱 Iniciando seed con comportamiento aleatorio realista...');
+  console.log('🌱 Iniciando seed calibrado con dataset real de cancelaciones...');
 
-  // --- PASO 1: Crear los barberos ---
-  // Se crea el usuario si no existe (para poder ejecutar el seed múltiples veces)
+  // ─── Cargar dataset (con fallback si el archivo no existe) ────────────────
+  let dataset = null;
+  try {
+    dataset = await loadDataset();
+    console.log(`📊 Dataset cargado: ${dataset.staff.length} staff, ${dataset.clientes.length} clientes`);
+  } catch (err) {
+    console.warn('⚠️  No se pudo cargar el dataset de cancelaciones; usando valores por defecto.', err.message);
+  }
+
+  // ─── Barberos: 4 staff del dataset (o fallback hardcodeado) ───────────────
+  const top4Staff = (dataset?.staff || STAFF_DEFAULT).slice(0, 4);
+  const BARBEROS  = top4Staff.map((name, i) => ({
+    email:   `${name.toLowerCase()}@barberturn.com`,
+    name,
+    horario: HORARIOS[i],
+  }));
+
+  // ─── Clientes del dataset: top 25 sin cuenta Meteor ───────────────────────
+  const codesDataset   = dataset?.clientes || [];
+  const DATASET_CLIENTES = codesDataset.slice(0, 25).map((c, i) => ({
+    name:   `Cliente ${c.code}`,
+    phone:  `0991${String(100 + i).padStart(6, '0')}`,
+    patron: patronDesde(c.code),
+  }));
+
+  const tasaCancelacionPorDia = dataset?.tasaCancelacionPorDia || TASA_CANCEL_DEFAULT;
+
+  // ─── PASO 1: Crear barberos ───────────────────────────────────────────────
   const barberoIds = [];
   for (const b of BARBEROS) {
-    // Buscar si ya existe un usuario con este email
     let userId = (await Meteor.users.findOneAsync({ 'emails.address': b.email }))?._id;
     if (!userId) {
-      // Crear el usuario barbero con rol 'barbero' en su perfil
       userId = await Accounts.createUser({
         email: b.email, password: '123456',
-        profile: { name: b.name, role: 'barbero' }
+        profile: { name: b.name, role: 'barbero' },
       });
       console.log(`💈 Barbero creado: ${b.name}`);
     }
-    // Almacenar el userId junto con los datos del barbero para uso posterior
     barberoIds.push({ userId, ...b });
   }
 
-  // --- PASO 2: Crear los clientes ---
-  // Similar a los barberos: crear si no existen, reutilizar si ya existen
+  // ─── PASO 2: Crear clientes demo + cargar clientes del dataset ────────────
   const clienteIds = [];
-  for (const c of CLIENTES) {
+
+  // 3 cuentas demo con login (para BookingPage)
+  for (const c of DEMO_CLIENTES) {
     let userId = (await Meteor.users.findOneAsync({ 'emails.address': c.email }))?._id;
     if (!userId) {
       userId = await Accounts.createUser({
         email: c.email, password: '123456',
-        profile: { name: c.name, role: 'cliente', phone: c.phone }
+        profile: { name: c.name, role: 'cliente', phone: c.phone },
       });
     }
-    // Almacenar el userId junto con los datos del cliente (incluye el patrón de comportamiento)
     clienteIds.push({ userId, ...c });
   }
 
-  // --- PASO 3: Generar 8 semanas de histórico ---
+  // Hasta 25 clientes del dataset (solo nombre y patrón; sin cuenta Meteor)
+  for (const c of DATASET_CLIENTES) {
+    clienteIds.push(c);
+  }
+
+  // ─── PASO 3: Generar 8 semanas de histórico ───────────────────────────────
   const hoy = new Date();
   let totalSlots = 0, totalReservas = 0, totalCancelados = 0;
 
-  // Iterar desde la semana más antigua (semana 8) hasta la más reciente (semana 1)
   for (let semana = 8; semana >= 1; semana--) {
-    // Iterar los 7 días de cada semana
     for (let offsetDia = 0; offsetDia < 7; offsetDia++) {
-
-      // Calcular la fecha exacta: (semanas atrás × 7 días) + offset del día
       const fecha = new Date(hoy);
       fecha.setDate(hoy.getDate() - (semana * 7) + offsetDia);
-
-      // getDay() retorna 0=Domingo, 1=Lunes... 6=Sábado
       const diaSemana = fecha.getDay();
+      if (diaSemana === 0) continue; // Sin domingos
 
-      // Omitir domingos ya que la barbería no trabaja ese día
-      if (diaSemana === 0) continue;
-
-      // Normalizar la fecha a UTC-5 medianoche para consistencia en la BD
       const fechaDB = fechaUTC5(fecha);
 
-      // Iterar sobre cada barbero para generar sus slots del día
       for (const barbero of barberoIds) {
-        // Saltar si este barbero no trabaja este día de la semana
         if (!barbero.horario.dias.includes(diaSemana)) continue;
+        if (Math.random() < 0.05) continue; // 5% ausencia esporádica
 
-        // Simular ausencias esporádicas del barbero: 5% de probabilidad de falta
-        if (Math.random() < 0.05) continue;
-
-        // Iterar sobre cada hora del horario del barbero
         for (const hora of barbero.horario.horas) {
-          // Simular slots que no se crean por imprevisto: 10% de probabilidad
-          if (Math.random() < 0.10) continue;
+          if (Math.random() < 0.10) continue; // 10% slot no creado
 
-          // Verificar si el slot ya fue creado en una ejecución anterior del seed
           const existe = await Slots.findOneAsync({
-            barberId: barbero.userId, date: fechaDB, hour: hora
+            barberId: barbero.userId, date: fechaDB, hour: hora,
           });
           if (existe) continue;
 
-          // Crear el slot disponible para este barbero, fecha y hora
           const slotId = await Slots.insertAsync({
             barberId: barbero.userId,
             date: fechaDB, hour: hora,
@@ -256,41 +206,24 @@ export const runSeed = async () => {
           });
           totalSlots++;
 
-          // --- SIMULACIÓN DE RESERVAS ---
-          // Mezclar aleatoriamente el orden de los clientes para simular quién llega primero
-          const clientesMezclados = [...clienteIds].sort(() => Math.random() - 0.5);
+          // Mezclar clientes y probar reserva en orden aleatorio
+          const mezclados = [...clienteIds].sort(() => Math.random() - 0.5);
           let slotOcupado = false;
 
-          // Probar cada cliente en orden aleatorio hasta que uno reserve o se agoten
-          for (const cliente of clientesMezclados) {
-            // Si el slot ya fue ocupado por un cliente anterior, pasar al siguiente slot
+          for (const cliente of mezclados) {
             if (slotOcupado) break;
-
-            // Calcular la probabilidad de que este cliente reserve en este día/hora
-            const prob = calcProb(cliente, diaSemana, hora);
-
-            // Decidir si el cliente reserva y con qué estado
-            const status = decidirStatus(prob);
-
-            // Si el cliente decide reservar (status no es null)
+            const prob   = calcProb(cliente, diaSemana, hora);
+            const status = decidirStatus(prob, diaSemana, tasaCancelacionPorDia);
             if (status) {
-              // Crear el appointment para esta reserva simulada
               const appointmentId = await Appointments.insertAsync({
-                slotId, clientName: cliente.name, clientPhone: cliente.phone,
+                slotId,
+                clientName: cliente.name, clientPhone: cliente.phone,
                 barberId: barbero.userId, date: fechaDB, hour: hora,
                 status, createdAt: fecha,
               });
-
-              // Marcar el slot como ocupado con referencia al appointment creado
-              await Slots.updateAsync(slotId, {
-                $set: { isAvailable: false, appointmentId }
-              });
-
-              // Actualizar contadores para las estadísticas finales
+              await Slots.updateAsync(slotId, { $set: { isAvailable: false, appointmentId } });
               if (status === 'confirmed') totalReservas++;
               if (status === 'cancelled') totalCancelados++;
-
-              // Marcar el slot como ocupado para no asignarlo a otro cliente
               slotOcupado = true;
             }
           }
@@ -299,11 +232,17 @@ export const runSeed = async () => {
     }
   }
 
-  // --- ESTADÍSTICAS FINALES ---
-  // Imprimir resumen del seed para monitoreo durante el arranque del servidor
-  console.log(`✅ Seed completado:`);
+  // ─── ESTADÍSTICAS FINALES ─────────────────────────────────────────────────
+  const ocupacion = totalSlots > 0 ? ((totalReservas / totalSlots) * 100).toFixed(1) : '0.0';
+  console.log('✅ Seed completado:');
   console.log(`   📅 Slots:       ${totalSlots}`);
   console.log(`   ✅ Confirmados: ${totalReservas}`);
   console.log(`   ❌ Cancelados:  ${totalCancelados}`);
-  console.log(`   📊 Ocupación:   ${((totalReservas/totalSlots)*100).toFixed(1)}%`);
+  console.log(`   📊 Ocupación:   ${ocupacion}%`);
+  if (dataset) {
+    console.log('   📋 Parámetros del dataset usados:');
+    console.log(`      Staff (top 4):   ${top4Staff.join(', ')}`);
+    console.log(`      Tasa cancel/día: ${JSON.stringify(tasaCancelacionPorDia)}`);
+    console.log(`      Anticipación:    ${JSON.stringify(dataset.distAnticipacion)}`);
+  }
 };
