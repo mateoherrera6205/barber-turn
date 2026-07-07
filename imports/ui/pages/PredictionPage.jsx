@@ -27,6 +27,7 @@ import { Meteor } from 'meteor/meteor';
 import { useNavigate } from 'react-router-dom';
 import { usePredictions } from '../hooks/usePredictions';
 import { useStaffingPlan } from '../hooks/useStaffingPlan';
+import { formatoCorto } from '/imports/utils/fechas';
 
 const TIPO_EMOJI = { agregar: '➕', reasignar: '🔁', reducir: '➖', confirmar: '📞' };
 
@@ -149,6 +150,18 @@ export function PredictionPage() {
     </div>
   );
 
+  // Ventana de planificación: [hoy, hoy+6]
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  const hoyPlus6 = new Date(hoy);
+  hoyPlus6.setDate(hoy.getDate() + 6);
+  const ventana = `${formatoCorto(hoy)} – ${formatoCorto(hoyPlus6)}`;
+
+  const updatedAt = predictions?.[0]?.updatedAt;
+  const calculadoEl = updatedAt
+    ? `${formatoCorto(new Date(updatedAt))} ${new Date(updatedAt).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}`
+    : null;
+
   // Encontrar los datos del día actualmente seleccionado en los tabs
   const diaSeleccionado = porDia.find(d => d.dia === diaActivo);
 
@@ -159,9 +172,11 @@ export function PredictionPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <div>
           <h1 style={{ margin: 0 }}>🔮 Predicciones — BarberTurn</h1>
-          {/* Mostrar cuántas semanas de historial se usaron para el cálculo */}
+          {/* Mostrar cuántas semanas de historial, ventana de planificación y timestamp del cálculo */}
           <p style={{ margin: 0, color: '#6b7280' }}>
             Recomendación de plantilla basada en {porDia[0]?.franjas[0]?.semanasTomadas || 0} semanas de historial
+            {` · ventana: ${ventana}`}
+            {calculadoEl && ` · calculado el ${calculadoEl}`}
           </p>
           {predictions?.[0]?.fuenteCapacidad && (
             <p style={{ margin: '2px 0 0', color: '#9ca3af', fontSize: 12 }}>
@@ -224,7 +239,7 @@ export function PredictionPage() {
         return (
           <div style={{ marginBottom: 24 }}>
             <h3 style={{ marginTop: 0, marginBottom: 12, color: '#1f2937' }}>
-              📋 Plan de acción — {diaSeleccionado?.nombre || ''}
+              📋 Plan de acción — {diaSeleccionado?.nombre || ''} {diaSeleccionado?.fechaCorta || ''}
             </h3>
             {acciones.length === 0 ? (
               <p style={{ color: '#6b7280', fontStyle: 'italic', margin: 0 }}>
@@ -263,6 +278,7 @@ export function PredictionPage() {
             }}
           >
             {d.nombre}
+            <span style={{ display: 'block', fontSize: 11, opacity: 0.8 }}>{d.fechaCorta}</span>
             {/* Badge rojo con contador de alertas si el día tiene franjas problemáticas */}
             {d.alertas > 0 && (
               <span style={{
@@ -283,9 +299,9 @@ export function PredictionPage() {
       {/* Tabla de franjas del día seleccionado */}
       {diaSeleccionado && (
         <div style={{ background: '#f9fafb', borderRadius: 12, padding: 20 }}>
-          {/* Cabecera de la sección con el nombre del día y el pico de demanda */}
+          {/* Cabecera de la sección con la fecha del día y el pico de demanda */}
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-            <h2 style={{ margin: 0 }}>{diaSeleccionado.nombre}</h2>
+            <h2 style={{ margin: 0 }}>{diaSeleccionado.fechaLarga}</h2>
             <span style={{ color: '#6b7280', fontSize: 14, alignSelf: 'center' }}>
               Pico de demanda: {diaSeleccionado.maxDemanda} clientes/hora
             </span>

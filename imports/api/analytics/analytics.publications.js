@@ -6,7 +6,7 @@
  * de ocupación, demanda y estadísticas globales.
  *
  * Publicaciones disponibles:
- *  - analytics.overview → Combinación de Appointments y Slots con campos mínimos
+ *  - analytics.overview → Combinación de Appointments, Slots y perfiles de barberos
  */
 import { Meteor } from 'meteor/meteor';
 import { Appointments } from '/imports/api/appointments/appointments';
@@ -27,7 +27,7 @@ import { Slots } from '/imports/api/slots/slots';
  * - Requiere usuario autenticado (cualquier rol: barbero o cliente)
  * - Usada exclusivamente por el hook useAnalytics y la página AnalyticsPage
  *
- * @returns {Array<Cursor>} Array con dos cursores: [Appointments, Slots]
+ * @returns {Array<Cursor>} Array con tres cursores: [Appointments, Slots, Meteor.users (barberos)]
  */
 Meteor.publish('analytics.overview', function() {
   // Sin autenticación no se exponen datos estadísticos del sistema
@@ -39,5 +39,7 @@ Meteor.publish('analytics.overview', function() {
     Appointments.find({}, { fields: { barberId: 1, date: 1, hour: 1, status: 1 } }),
     // Solo los campos necesarios para calcular la ocupación por slot
     Slots.find({}, { fields: { barberId: 1, date: 1, hour: 1, isAvailable: 1 } }),
+    // Solo nombre y rol de barberos para mapear barberId→nombre en el cliente (sin emails ni services)
+    Meteor.users.find({ 'profile.role': 'barbero' }, { fields: { 'profile.name': 1, 'profile.role': 1 } }),
   ];
 });

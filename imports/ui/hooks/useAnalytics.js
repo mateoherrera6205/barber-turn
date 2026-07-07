@@ -93,8 +93,8 @@ export function useAnalytics() {
 
       return {
         barberId,
-        // Usar el nombre del perfil o los primeros 6 caracteres del ID como fallback
-        nombre:      usuario?.profile?.name || barberId.slice(0, 6),
+        // Usar el nombre del perfil o un fallback legible con los primeros 6 chars del ID
+        nombre:      usuario?.profile?.name || `Barbero ${barberId.slice(0, 6)}`,
         totalSlots:  slotsB.length,
         confirmados: apptB.length,
         // Porcentaje de ocupación con 1 decimal, 0 si no hay slots
