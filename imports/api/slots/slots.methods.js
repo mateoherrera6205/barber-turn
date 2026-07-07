@@ -67,12 +67,12 @@ Meteor.methods({
 
     if (!this.userId) throw new Meteor.Error('not-logged-in', 'Debes iniciar sesión');
 
-    const gestor = Meteor.users.findOne(this.userId);
+    const gestor = await Meteor.users.findOneAsync(this.userId);
     if (gestor?.profile?.role !== 'barbero') {
       throw new Meteor.Error('not-authorized', 'Solo barberos pueden asignar slots');
     }
 
-    const barbero = Meteor.users.findOne(barberId);
+    const barbero = await Meteor.users.findOneAsync(barberId);
     if (!barbero || barbero.profile?.role !== 'barbero') {
       throw new Meteor.Error('barbero-invalido', 'El usuario no es un barbero válido');
     }
@@ -108,7 +108,7 @@ Meteor.methods({
 
     if (!this.userId) throw new Meteor.Error('not-logged-in', 'Debes iniciar sesión');
 
-    const gestor = Meteor.users.findOne(this.userId);
+    const gestor = await Meteor.users.findOneAsync(this.userId);
     if (gestor?.profile?.role !== 'barbero') {
       throw new Meteor.Error('not-authorized', 'Solo barberos pueden quitar slots');
     }
