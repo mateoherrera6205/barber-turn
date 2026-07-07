@@ -206,8 +206,10 @@ export const runSeed = async () => {
           });
           totalSlots++;
 
-          // Mezclar clientes y probar reserva en orden aleatorio
-          const mezclados = [...clienteIds].sort(() => Math.random() - 0.5);
+          // Muestra aleatoria de 5 clientes por slot (vs. probar los ~28)
+          // Baja el llenado de ~99% a ~76%, más realista y permite que
+          // 'sobrecapacidad'/'reducir' aparezcan con naturalidad.
+          const mezclados = [...clienteIds].sort(() => Math.random() - 0.5).slice(0, 5);
           let slotOcupado = false;
 
           for (const cliente of mezclados) {

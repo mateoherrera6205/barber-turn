@@ -102,7 +102,11 @@ export const loadDataset = async () => {
   const normFactor = avgRaw > 0 ? 0.18 / avgRaw : 1;
   const tasaCancelacionPorDia = {};
   for (let d = 1; d <= 6; d++) {
-    tasaCancelacionPorDia[d] = parseFloat((rawRates[d] * normFactor).toFixed(4));
+    const tasa = parseFloat((rawRates[d] * normFactor).toFixed(4));
+    // Si la tasa quedó en 0 es por ausencia de datos ese día en el dataset
+    // (el salón cerraba los lunes: 0 cancelaciones ≠ tasa real 0).
+    // Se asigna el promedio de normalización como piso conservador.
+    tasaCancelacionPorDia[d] = tasa === 0 ? 0.18 : tasa;
   }
 
   // Distribución de anticipación de cancelación

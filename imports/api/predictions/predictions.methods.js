@@ -86,23 +86,43 @@ export const calcularPredicciones = async (strategyName = 'simple') => {
     status: { $in: ['confirmed', 'cancelled'] },
   }).fetchAsync();
 
-  // Capacidad programada real por franja (CAMBIO A)
+  // Todos los slots para capacidad histórica
   const slots = await Slots.find({}).fetchAsync();
   const capacidadMap = buildCapacidadMap(slots);
+
+  // Capacidad futura: slots de los próximos 7 días.
+  // Si existen, reflejan la plantilla real planeada y tienen prioridad
+  // sobre el promedio histórico para calcular el gap.
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  const proximaSemana = new Date(hoy);
+  proximaSemana.setDate(proximaSemana.getDate() + 7);
+
+  const slotsFuturos = slots.filter(s => {
+    const d = new Date(s.date);
+    return d >= hoy && d < proximaSemana;
+  });
+  const haySlotsFuturos = slotsFuturos.length > 0;
+  const capacidadEfectivaMap = haySlotsFuturos ? buildCapacidadMap(slotsFuturos) : capacidadMap;
+  const fuenteCapacidad = haySlotsFuturos ? 'proxima_semana' : 'historica';
+
+  console.log(`📅 Capacidad comparada: ${fuenteCapacidad} (${haySlotsFuturos ? slotsFuturos.length : slots.length} slots)`);
 
   // Calcular predicciones base con la estrategia elegida
   const strategy = selectStrategy(strategyName);
   const rawPredicciones = strategy.calculate(appointments);
 
-  // Enriquecer con capacidad real y recalcular alerta (CAMBIO B)
+  // Enriquecer con capacidad real, guard de demanda y recalcular alerta
   const predicciones = rawPredicciones.map(pred => {
-    const capacidadProgramada = capacidadMap.get(`${pred.diaSemana}-${pred.hora}`) ?? 0;
-    const gap = pred.barberosRecomendados - capacidadProgramada;
+    const capacidadProgramada = capacidadEfectivaMap.get(`${pred.diaSemana}-${pred.hora}`) ?? 0;
+    const gap = PredictionStrategy.calcularGap(
+      pred.barberosRecomendados, capacidadProgramada, pred.clientesEsperados,
+    );
     const riesgoCancelacion = parseFloat((1 - pred.ocupacionHistorica).toFixed(2));
     const alerta = PredictionStrategy.detectarAlertaConCapacidad(
       gap, pred.clientesEsperados, capacidadProgramada, pred.ocupacionHistorica,
     );
-    return { ...pred, capacidadProgramada, gap, riesgoCancelacion, alerta };
+    return { ...pred, capacidadProgramada, gap, riesgoCancelacion, alerta, fuenteCapacidad };
   });
 
   // Persistir predicciones enriquecidas

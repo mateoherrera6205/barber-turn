@@ -7,6 +7,7 @@ import { SlotsRepository } from '../imports/api/repositories/SlotsRepository';
 import { AppointmentService } from '../imports/api/services/AppointmentService';
 import { APPOINTMENT_STATUS } from '../imports/utils/constants';
 import { StaffingPlanner } from '../imports/api/predictions/StaffingPlanner';
+import { PredictionStrategy } from '../imports/api/predictions/strategies/PredictionStrategy';
 
 if (Meteor.isServer) {
   const appointmentsRepo = new AppointmentsRepository();
@@ -180,6 +181,27 @@ if (Meteor.isServer) {
       assert.ok(reasignar, 'debe generarse una acción reasignar');
       assert.strictEqual(reasignar.diaSemana, 1, 'la acción debe corresponder al Lunes');
       assert.strictEqual(reasignar.prioridad, 1, 'prioridad de reasignar debe ser 1');
+    });
+
+    it('franja muerta (clientesEsperados < 0.5) retorna gap=0 y no genera agregar', function () {
+      // calcularGap debe retornar 0 cuando hay poca demanda aunque falte capacidad
+      const gap = PredictionStrategy.calcularGap(1, 0, 0.2);
+      assert.strictEqual(gap, 0, 'calcularGap debe retornar 0 para franja con demanda < 0.5');
+
+      // Con gap=0 el StaffingPlanner no debe generar acción agregar
+      const predicciones = [{
+        diaSemana: 3,
+        hora: '09:00',
+        barberosRecomendados: 1,
+        capacidadProgramada: 0,
+        gap: 0,
+        clientesEsperados: 0.2,
+        ocupacionHistorica: 0.1,
+        riesgoCancelacion: 0.90,
+        alerta: 'ok',
+      }];
+      const plan = new StaffingPlanner().generarPlan(predicciones);
+      assert.ok(!plan.find(a => a.tipo === 'agregar'), 'no debe generarse agregar en franja muerta');
     });
 
   });

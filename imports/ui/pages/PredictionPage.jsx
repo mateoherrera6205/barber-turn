@@ -120,7 +120,7 @@ function FranjaRow({ franja }) {
 
 export function PredictionPage() {
   const navigate = useNavigate();
-  const { isLoading, porDia, totalAlertas, totalOverbooking } = usePredictions();
+  const { isLoading, porDia, predictions, totalAlertas, totalOverbooking } = usePredictions();
   const { accionesPorDia, isLoading: isLoadingPlan } = useStaffingPlan();
 
   // Día activo en los tabs (1=Lunes por defecto al cargar la página)
@@ -163,6 +163,14 @@ export function PredictionPage() {
           <p style={{ margin: 0, color: '#6b7280' }}>
             Recomendación de plantilla basada en {porDia[0]?.franjas[0]?.semanasTomadas || 0} semanas de historial
           </p>
+          {predictions?.[0]?.fuenteCapacidad && (
+            <p style={{ margin: '2px 0 0', color: '#9ca3af', fontSize: 12 }}>
+              Capacidad comparada:{' '}
+              {predictions[0].fuenteCapacidad === 'proxima_semana'
+                ? 'slots de la próxima semana'
+                : 'promedio histórico'}
+            </p>
+          )}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {/* Botón de regreso al dashboard */}
@@ -229,7 +237,7 @@ export function PredictionPage() {
                   background: accion.prioridad === 1 ? '#fef2f2' : '#fffbeb',
                   borderRadius: 6, padding: '10px 16px', marginBottom: 8,
                 }}>
-                  {TIPO_EMOJI[accion.tipo] || '•'} {accion.mensaje}
+                  {TIPO_EMOJI[accion.tipo] || '•'} 🕐 {accion.hora} — {accion.mensaje}
                 </div>
               ))
             )}

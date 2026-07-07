@@ -37,6 +37,20 @@ export class PredictionStrategy {
    * @param {Number} ocupacion           — ratio histórico 0 a 1
    * @returns {'ok'|'demanda_alta'|'overbooking'|'sobrecapacidad'}
    */
+  /**
+   * Guard de demanda mínima: evita falsos "agrega barbero" en franjas donde
+   * casi nadie va (<0.5 clientes esperados). En esas franjas el gap real es 0
+   * independientemente de cuántos barberos haya programados.
+   * @param {Number} barberosRecomendados
+   * @param {Number} capacidadProgramada
+   * @param {Number} clientesEsperados
+   * @returns {Number} 0 si franja muerta, barberosRecomendados-capacidadProgramada si no
+   */
+  static calcularGap(barberosRecomendados, capacidadProgramada, clientesEsperados) {
+    if (clientesEsperados < 0.5) return 0;
+    return barberosRecomendados - capacidadProgramada;
+  }
+
   static detectarAlertaConCapacidad(gap, clientesEsperados, capacidadProgramada, ocupacion) {
     if (gap > 0) return 'overbooking';
     if (gap < 0 && clientesEsperados < capacidadProgramada * 0.5) return 'sobrecapacidad';
