@@ -17,16 +17,30 @@ export class PredictionStrategy {
   static DIAS = [1, 2, 3, 4, 5, 6];
 
   /**
-   * Clasifica el estado de una franja horaria según sus métricas.
-   * @param {Number} clientesEsperados
-   * @param {Number} barberosRecomendados
-   * @param {Number} ocupacion  — ratio 0 a 1
-   * @returns {'ok'|'demanda_alta'|'overbooking'|'sobrecapacidad'}
+   * @deprecated Las alertas 'overbooking' y 'sobrecapacidad' son inalcanzables
+   * porque barberosRecomendados = ceil(clientesEsperados) ≥ clientesEsperados siempre.
+   * Usar detectarAlertaConCapacidad para comparar contra capacidad programada real.
    */
   static detectarAlerta(clientesEsperados, barberosRecomendados, ocupacion) {
     if (ocupacion > 0.85) return 'demanda_alta';
     if (clientesEsperados > barberosRecomendados) return 'overbooking';
     if (barberosRecomendados > 3 && clientesEsperados < barberosRecomendados * 0.4) return 'sobrecapacidad';
+    return 'ok';
+  }
+
+  /**
+   * Clasifica el estado de una franja comparando la demanda contra la capacidad
+   * real programada (slots existentes), no contra la propia recomendación.
+   * @param {Number} gap                — barberosRecomendados - capacidadProgramada
+   * @param {Number} clientesEsperados
+   * @param {Number} capacidadProgramada — barberos distintos con slot en esa franja
+   * @param {Number} ocupacion           — ratio histórico 0 a 1
+   * @returns {'ok'|'demanda_alta'|'overbooking'|'sobrecapacidad'}
+   */
+  static detectarAlertaConCapacidad(gap, clientesEsperados, capacidadProgramada, ocupacion) {
+    if (gap > 0) return 'overbooking';
+    if (gap < 0 && clientesEsperados < capacidadProgramada * 0.5) return 'sobrecapacidad';
+    if (ocupacion > 0.85 && gap === 0) return 'demanda_alta';
     return 'ok';
   }
 

@@ -6,6 +6,7 @@ import { AppointmentsRepository } from '../imports/api/repositories/Appointments
 import { SlotsRepository } from '../imports/api/repositories/SlotsRepository';
 import { AppointmentService } from '../imports/api/services/AppointmentService';
 import { APPOINTMENT_STATUS } from '../imports/utils/constants';
+import { StaffingPlanner } from '../imports/api/predictions/StaffingPlanner';
 
 if (Meteor.isServer) {
   const appointmentsRepo = new AppointmentsRepository();
@@ -122,4 +123,65 @@ if (Meteor.isServer) {
     });
 
   });
+
+  // ─────────────────────────────────────────────────────────────────────
+  describe('StaffingPlanner', function () {
+
+    it('franja con gap positivo genera acción agregar', function () {
+      const predicciones = [{
+        diaSemana: 6,
+        hora: '10:00',
+        barberosRecomendados: 3,
+        capacidadProgramada: 2,
+        gap: 1,
+        clientesEsperados: 2.5,
+        ocupacionHistorica: 0.9,
+        riesgoCancelacion: 0.10,
+        alerta: 'overbooking',
+      }];
+
+      const plan = new StaffingPlanner().generarPlan(predicciones);
+
+      const agregar = plan.find(a => a.tipo === 'agregar');
+      assert.ok(agregar, 'debe generarse una acción agregar');
+      assert.strictEqual(agregar.diaSemana, 6, 'la acción debe corresponder al Sábado');
+      assert.strictEqual(agregar.prioridad, 1, 'prioridad de agregar debe ser 1');
+    });
+
+    it('día con excedente y déficit en la misma jornada genera acción reasignar', function () {
+      const predicciones = [
+        {
+          diaSemana: 1,
+          hora: '09:00',
+          barberosRecomendados: 1,
+          capacidadProgramada: 3,
+          gap: -2,
+          clientesEsperados: 0.5,
+          ocupacionHistorica: 0.5,
+          riesgoCancelacion: 0.50,
+          alerta: 'sobrecapacidad',
+        },
+        {
+          diaSemana: 1,
+          hora: '15:00',
+          barberosRecomendados: 3,
+          capacidadProgramada: 1,
+          gap: 2,
+          clientesEsperados: 2.5,
+          ocupacionHistorica: 0.8,
+          riesgoCancelacion: 0.20,
+          alerta: 'overbooking',
+        },
+      ];
+
+      const plan = new StaffingPlanner().generarPlan(predicciones);
+
+      const reasignar = plan.find(a => a.tipo === 'reasignar');
+      assert.ok(reasignar, 'debe generarse una acción reasignar');
+      assert.strictEqual(reasignar.diaSemana, 1, 'la acción debe corresponder al Lunes');
+      assert.strictEqual(reasignar.prioridad, 1, 'prioridad de reasignar debe ser 1');
+    });
+
+  });
+
 }

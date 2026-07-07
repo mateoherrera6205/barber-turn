@@ -26,6 +26,9 @@ import React, { useState } from 'react';
 import { Meteor } from 'meteor/meteor';
 import { useNavigate } from 'react-router-dom';
 import { usePredictions } from '../hooks/usePredictions';
+import { useStaffingPlan } from '../hooks/useStaffingPlan';
+
+const TIPO_EMOJI = { agregar: '➕', reasignar: '🔁', reducir: '➖', confirmar: '📞' };
 
 /**
  * ALERTA_CONFIG
@@ -93,12 +96,12 @@ function FranjaRow({ franja }) {
         <p style={{ margin: 0, fontSize: 11, color: '#9ca3af' }}>clientes esperados</p>
       </div>
 
-      {/* Columna 3: Barberos recomendados para cubrir la demanda */}
+      {/* Columna 3: Barberos programados vs recomendados */}
       <div style={{ textAlign: 'center' }}>
-        <p style={{ margin: 0, fontSize: 18, fontWeight: 'bold', color: '#10b981' }}>
-          {franja.barberosRecomendados}
+        <p style={{ margin: 0, fontSize: 18, fontWeight: 'bold', color: (franja.gap ?? 0) > 0 ? '#ef4444' : '#10b981' }}>
+          {franja.capacidadProgramada ?? 0} → {franja.barberosRecomendados}
         </p>
-        <p style={{ margin: 0, fontSize: 11, color: '#9ca3af' }}>barberos necesarios</p>
+        <p style={{ margin: 0, fontSize: 11, color: '#9ca3af' }}>programados → necesarios</p>
       </div>
 
       {/* Columna 4: Ocupación histórica en porcentaje */}
@@ -117,8 +120,8 @@ function FranjaRow({ franja }) {
 
 export function PredictionPage() {
   const navigate = useNavigate();
-  // Obtener las predicciones agrupadas por día y los contadores de alertas
   const { isLoading, porDia, totalAlertas, totalOverbooking } = usePredictions();
+  const { accionesPorDia, isLoading: isLoadingPlan } = useStaffingPlan();
 
   // Día activo en los tabs (1=Lunes por defecto al cargar la página)
   const [diaActivo, setDiaActivo] = useState(1);
@@ -207,6 +210,33 @@ export function PredictionPage() {
         </div>
       )}
 
+      {/* Plan de acción para el día activo */}
+      {(() => {
+        const acciones = isLoadingPlan ? [] : (accionesPorDia[diaActivo] || []);
+        return (
+          <div style={{ marginBottom: 24 }}>
+            <h3 style={{ marginTop: 0, marginBottom: 12, color: '#1f2937' }}>
+              📋 Plan de acción — {diaSeleccionado?.nombre || ''}
+            </h3>
+            {acciones.length === 0 ? (
+              <p style={{ color: '#6b7280', fontStyle: 'italic', margin: 0 }}>
+                Sin ajustes necesarios ✅
+              </p>
+            ) : (
+              acciones.map((accion, idx) => (
+                <div key={accion._id || idx} style={{
+                  border: `1px solid ${accion.prioridad === 1 ? '#ef4444' : '#f59e0b'}`,
+                  background: accion.prioridad === 1 ? '#fef2f2' : '#fffbeb',
+                  borderRadius: 6, padding: '10px 16px', marginBottom: 8,
+                }}>
+                  {TIPO_EMOJI[accion.tipo] || '•'} {accion.mensaje}
+                </div>
+              ))
+            )}
+          </div>
+        );
+      })()}
+
       {/* Tabs de navegación por día de semana (Lunes a Sábado) */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
         {porDia.map(d => (
@@ -259,7 +289,7 @@ export function PredictionPage() {
             gridTemplateColumns: '80px 1fr 1fr 1fr 140px',
             gap: 12, padding: '0 16px', marginBottom: 8,
           }}>
-            {['Hora', 'Clientes esperados', 'Barberos necesarios', 'Ocupación histórica', 'Estado'].map(h => (
+            {['Hora', 'Clientes esperados', 'Programados → necesarios', 'Ocupación histórica', 'Estado'].map(h => (
               <span key={h} style={{ fontSize: 12, color: '#9ca3af', fontWeight: 'bold' }}>{h}</span>
             ))}
           </div>

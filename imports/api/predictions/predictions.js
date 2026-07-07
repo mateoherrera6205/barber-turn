@@ -18,6 +18,9 @@
  *   ocupacionHistorica: Number,     // Porcentaje de slots confirmados vs total (0 a 1)
  *   alerta: String,                 // 'ok' | 'overbooking' | 'sobrecapacidad' | 'demanda_alta'
  *   semanasTomadas: Number,         // Cantidad de semanas de histórico consideradas
+ *   capacidadProgramada: Number,    // Promedio semanal de barberos distintos con slot en la franja
+ *   gap: Number,                    // barberosRecomendados - capacidadProgramada (+ = déficit, - = excedente)
+ *   riesgoCancelacion: Number,      // 1 - ocupacionHistorica, redondeado a 2 decimales
  *   updatedAt: Date,                // Fecha del último recálculo
  * }
  */

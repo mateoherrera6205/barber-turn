@@ -9,6 +9,7 @@
  */
 import { Meteor } from 'meteor/meteor';
 import { Predictions } from './predictions';
+import { StaffingPlan } from './staffingPlan';
 
 /**
  * predictions.all
@@ -24,10 +25,12 @@ import { Predictions } from './predictions';
  *
  * @returns {Cursor} Cursor de todas las Predictions ordenadas por diaSemana y hora
  */
-Meteor.publish('predictions.all',function(){
-    // Si no hay usuario autenticado, no publicar ningún dato
-    if (!this.userId)return this.ready();
+Meteor.publish('predictions.all', function () {
+  if (!this.userId) return this.ready();
+  return Predictions.find({}, { sort: { diaSemana: 1, hora: 1 } });
+});
 
-    // Retornar todas las predicciones ordenadas para facilitar el agrupamiento en el cliente
-    return Predictions.find({},{sort:{diaSemana:1, Hora:1}});
+Meteor.publish('staffingPlan.all', function () {
+  if (!this.userId) return this.ready();
+  return StaffingPlan.find({}, { sort: { diaSemana: 1, prioridad: 1 } });
 });
